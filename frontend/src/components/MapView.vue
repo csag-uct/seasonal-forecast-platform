@@ -84,7 +84,7 @@ const selectedStyle = new Style({
 // The GeoJSON is in EPSG:102113 (== EPSG:3857 Web Mercator).
 // Tell OpenLayers to read and display it in 3857 — no reprojection needed.
 const vectorSource = new VectorSource({
-  url:    "/hexgrid.geojson",
+  url:    "hexgrid.geojson",
   format: new GeoJSON({
     dataProjection:    "EPSG:3857",
     featureProjection: "EPSG:3857",
