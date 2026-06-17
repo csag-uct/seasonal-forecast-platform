@@ -155,7 +155,7 @@ def timeseries(collection, dataset, varname, feature_id):
             ids = list(ds['id'].data)
         except:
             response['error'] = f'No id variable in dataset {dataset}'
-            return (response, headers)
+            return jsonify(response), 500
 
         loc = ids.index(feature_id)
 
@@ -218,7 +218,7 @@ def forecast(model, year, month, varname, feature_id):
 
     # Parse lead time range (default: 0-5 months ahead)
     # lead=(0,3) means forecast months 0, 1, 2, 3 after initialization
-    lead_arg = request.args.get('lead')
+    lead_arg = request.args.get('lead', '0,5')
     lead = tuple(int(v) for v in lead_arg.split(','))
 
     # Parse obs_threshold argument 
@@ -315,19 +315,25 @@ def forecast(model, year, month, varname, feature_id):
 
             extract = fcst_var[time_indices, lead_slice, :, fcst_loc]  # use all 51 not 20 (not sure what happened here)
             extract = extract.squeeze() * VARMAP[varname]['scale']  # drop now 1 dim time step and scale to mm/day
-            print(extract.shape, extract)
+            #print(extract.shape, extract)
 #            extract = extract.mean(axis=0)  # get the mean of the first dimension (lead_slice)(we get our month then work with this + forecast leads)
             extract = extract.sum(axis=0)  # get the mean of the first dimension (lead_slice)(we get our month then work with this + forecast leads)
-            print(extract.shape) #= (20,) or (51,) for full ensemble
+            print(extract.shape, extract) #= (20,) or (51,) for full ensemble
+            
             ensemble_vals = extract.flatten().tolist()
             vals[y]['ensemble'] = ensemble_vals
-            #print(vals[y])
+            print(f"vals[{y}]", ensemble_vals)
+
             if y < forecast_year-2: # ie is a hindcast not the forecast
-                bigbag['ensemble'].append(ensemble_vals) # a list of lists n_years long, each list containing 20 ensemble members
+                bigbag['ensemble'].append(ensemble_vals[:20]) # a list of lists n_years long, each list containing 20 ensemble members
+
                 yearA = y
                 yearB = y
                 monthA = month + lead[0]
                 monthB = month + lead[1]
+                if monthA > 12:
+                    monthA -= 12
+                    yearA += 1
                 if monthB > 12:
                     monthB -= 12
                     yearB += 1
@@ -337,6 +343,7 @@ def forecast(model, year, month, varname, feature_id):
                 obsval = obsvar.loc[startdate: enddate].sum(axis=0).data.tolist()
                 print(obsval)
                 bigbag['observed'].append(obsval)
+
         obs_ds.close()
         fcst_ds.close()
 
@@ -364,7 +371,7 @@ def forecast(model, year, month, varname, feature_id):
     prob_below = []
     prob_above = []
     for i in range(len(bigbag['ensemble'])):
-        ens_vals = bigbag['ensemble'][i]
+        ens_vals = np.array(bigbag['ensemble'][i])
         prob_below.append(100.0 * (ens_vals < ens_threshold).sum() / len(ens_vals))
         prob_above.append(100.0 * (ens_vals >= ens_threshold).sum() / len(ens_vals))
         del ens_vals
@@ -378,6 +385,7 @@ def forecast(model, year, month, varname, feature_id):
 
     # Calculate forecast probabilities for the target year
     forecast_ensemble = vals[forecast_year]['ensemble']
+    print(forecast_year, np.sort(forecast_ensemble))
     prob_below = 100.0 * (np.array(forecast_ensemble) < ens_threshold).sum() / len(forecast_ensemble)
     prob_above = 100.0 * (np.array(forecast_ensemble) >= ens_threshold).sum() / len(forecast_ensemble)
     
