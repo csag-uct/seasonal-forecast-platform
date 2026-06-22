@@ -131,60 +131,64 @@ def timeseries(collection, dataset, varname, feature_id):
         except:
             return jsonify({'error': f'Failed to open datasets {dataset} at path {path}'})
 
-        variable = ds[varname]
-
-        if timeagg == 'monthly':
-            times = list(variable.time.data)
-
-        elif timeagg == 'seasonal':
-            variable = variable.groupby(variable.time.dt.month).mean()
-            times = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-        elif timeagg == 'annual':
-            date_filter = ds.time.dt.month.isin(months).data
-            variable = variable.isel(time=date_filter)
-           
-            if agg == 'mean':
-                variable = variable.groupby(variable.time.dt.year).mean()
-            else:
-                variable = variable.groupby(variable.time.dt.year).sum()
-            
-            times = list(variable.year.data)
-
         try:
-            ids = list(ds['id'].data)
-        except:
-            response['error'] = f'No id variable in dataset {dataset}'
-            return jsonify(response), 500
+            variable = ds[varname]
 
-        loc = ids.index(feature_id)
+            if timeagg == 'monthly':
+                times = list(variable.time.data)
 
-        if loc < 0:
-            response['error'] = f'Failed to find feature id {feature_id} in {dataset}'
+            elif timeagg == 'seasonal':
+                variable = variable.groupby(variable.time.dt.month).mean()
+                times = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-        slices = [slice(None)] * len(variable.shape)
-        slices[-1] = loc
-        subset = variable[tuple(slices)]
+            elif timeagg == 'annual':
+                date_filter = ds.time.dt.month.isin(months).data
+                variable = variable.isel(time=date_filter)
 
-        vals = subset.data
+                if agg == 'mean':
+                    variable = variable.groupby(variable.time.dt.year).mean()
+                else:
+                    variable = variable.groupby(variable.time.dt.year).sum()
 
-        vals_min = vals.min()
-        vals_max = vals.max()
+                times = list(variable.year.data)
 
-        if anomaly == 'absolute':
-            vals = vals - vals.mean()
-        elif anomaly == 'relative':
-            vals = 100.0 * ((vals - vals.mean())/vals.mean())
+            else:
+                return jsonify({'error': f'Invalid timeagg value: {timeagg}'}), 400
 
-        vals = [float(v) for v in list(vals)]
-        times = [str(t) for t in times]
+            try:
+                ids = list(ds['id'].data)
+            except:
+                return jsonify({'error': f'No id variable in dataset {dataset}'}), 500
 
-        response['values'] = vals
-        response['minval'] = float(vals_min)
-        response['maxval'] = float(vals_max)
-        response['labels'] = times
+            try:
+                loc = ids.index(feature_id)
+            except ValueError:
+                return jsonify({'error': f'Failed to find feature id {feature_id} in {dataset}'}), 404
 
-        ds.close()
+            slices = [slice(None)] * len(variable.shape)
+            slices[-1] = loc
+            subset = variable[tuple(slices)]
+
+            vals = subset.data
+
+            vals_min = vals.min()
+            vals_max = vals.max()
+
+            if anomaly == 'absolute':
+                vals = vals - vals.mean()
+            elif anomaly == 'relative':
+                vals = 100.0 * ((vals - vals.mean())/vals.mean())
+
+            vals = [float(v) for v in list(vals)]
+            times = [str(t) for t in times]
+
+            response['values'] = vals
+            response['minval'] = float(vals_min)
+            response['maxval'] = float(vals_max)
+            response['labels'] = times
+
+        finally:
+            ds.close()
 
     return jsonify(response)
 
@@ -243,117 +247,130 @@ def forecast(model, year, month, varname, feature_id):
 
     with file_lock:
 
-        bigbag = {'observed': [], 'ensemble': []}
+        vals = {'years': [], 'observed': [], 'ensemble': []}
 
-        # === Load observed data ===
-        obs_ds = xr.open_dataset(obs_filename, engine='netcdf4')
-        obsvar = obs_ds['PRCPTOT']
-        obs_ids = list(obs_ds['id'].data)
-
-        # Find feature location in observed dataset
+        obs_ds = None
+        fcst_ds = None
         try:
-            obs_loc = obs_ids.index(feature_id)
-        except ValueError:
-            response['error'] = f'Feature ID {feature_id} not found in observed dataset.'
-            return (response, headers)
+            # === Load observed data ===
+            obs_ds = xr.open_dataset(obs_filename, engine='netcdf4')
+            obs_var = obs_ds['PRCPTOT']
+            obs_ids = list(obs_ds['id'].data)
 
-        obsvar = obsvar[:, obs_loc]
+            # Find feature location in observed dataset
+            try:
+                obs_loc = obs_ids.index(feature_id)
+            except ValueError:
+                response['error'] = f'Feature ID {feature_id} not found in observed dataset.'
+                return (response, headers)
 
-        # Load forecast data
-        fcst_ds = netCDF4.Dataset(fcst_filename)
+            print('obs_loc', obs_loc)
+            obs_var = obs_var[:, obs_loc]
 
-        try:
-            fcst_var = fcst_ds[VARMAP[varname]['name']]
-        except KeyError:
-            response['error'] = f'Variable {varname} not found in forecast dataset.'
-            return (response, headers)
+            # Load forecast data
+            fcst_ds = netCDF4.Dataset(fcst_filename)
 
-        try:
-            ids = list(fcst_ds['id'][:])
-            fcst_loc = ids.index(feature_id)
-        except:
-            response['error'] = f'Feature ID {feature_id} not found in forecast dataset.'
-            return (response, headers)
+            try:
+                fcst_var = fcst_ds[VARMAP[varname]['name']]
+            except KeyError:
+                response['error'] = f'Variable {varname} not found in forecast dataset.'
+                return (response, headers)
 
-        print('fcst var', fcst_var)
+            try:
+                fcst_ids = list(fcst_ds['id'][:])
+                fcst_loc = fcst_ids.index(feature_id)
+            except:
+                response['error'] = f'Feature ID {feature_id} not found in forecast dataset.'
+                return (response, headers)
 
-        # Get time information
-        fcst_times = netCDF4.num2date(fcst_ds['time'], fcst_ds['time'].units)
-        #times = times.filled()
-        
-        # Determine year range from data
-        years_in_data = [t.year for t in fcst_times if hasattr(t, 'year') and not pd.isna(t.year)]
-        if not years_in_data:
-            response['error'] = 'No valid years found in forecast dataset.'
-            return (response, headers)
-        
-        min_year = min(years_in_data)
-        max_year = max(years_in_data)
-        forecast_year = year  # Use the requested year from URL as forecast target
-        print('first, last, forecast', min_year, max_year, forecast_year)
-        
-        # Check if requested year is available in the dataset
-        if forecast_year not in years_in_data:
-            response['error'] = f'Requested forecast year {forecast_year} not found in dataset. Available years: {min_year}-{max_year}'
-            return (response, headers)
-        
-        vals = {}
-        for y in range(min_year, max_year+1):
-            print(y, month)
+            print('fcst_loc', fcst_loc)
+            fcst_var = fcst_var[..., fcst_loc]
 
-            # Find time indices for this year/month using flattened times
-            time_matches = [(t.year == y and t.month == month) for t in fcst_times]
-            time_indices = [i for i, match in enumerate(time_matches) if match]
-  
-            # store year by year data in a dict
-            vals[y] = {}
-            # Extract data based on time array structure
-            lead_slice = slice(lead[0], lead[1] + 1)
-            time_indices = np.array(time_indices)
-            print('time indices', time_indices)
-            print('lead slice', lead_slice)
+            # Get time information
+            fcst_times = netCDF4.num2date(fcst_ds['time'], fcst_ds['time'].units)
 
-            extract = fcst_var[time_indices, lead_slice, :, fcst_loc]  # use all 51 not 20 (not sure what happened here)
-            extract = extract.squeeze() * VARMAP[varname]['scale']  # drop now 1 dim time step and scale to mm/day
-            #print(extract.shape, extract)
-#            extract = extract.mean(axis=0)  # get the mean of the first dimension (lead_slice)(we get our month then work with this + forecast leads)
-            extract = extract.sum(axis=0)  # get the mean of the first dimension (lead_slice)(we get our month then work with this + forecast leads)
-            print(extract.shape, extract) #= (20,) or (51,) for full ensemble
-            
-            ensemble_vals = extract.flatten().tolist()
-            vals[y]['ensemble'] = ensemble_vals
-            print(f"vals[{y}]", ensemble_vals)
+            # Determine year range from data
+            years_in_data = [t.year for t in fcst_times if hasattr(t, 'year') and not pd.isna(t.year)]
+            if not years_in_data:
+                response['error'] = 'No valid years found in forecast dataset.'
+                return (response, headers)
 
-            if y < forecast_year-2: # ie is a hindcast not the forecast
-                bigbag['ensemble'].append(ensemble_vals[:20]) # a list of lists n_years long, each list containing 20 ensemble members
+            min_year = min(years_in_data)
+            max_year = max(years_in_data)
+            forecast_year = year  # Use the requested year from URL as forecast target
+            print('first, last, forecast', min_year, max_year, forecast_year)
 
-                yearA = y
-                yearB = y
-                monthA = month + lead[0]
-                monthB = month + lead[1]
-                if monthA > 12:
-                    monthA -= 12
-                    yearA += 1
-                if monthB > 12:
-                    monthB -= 12
-                    yearB += 1
-                startdate = f'{yearA}-{monthA:02d}-01'
-                enddate = f'{yearB}-{monthB:02d}-28'
-                print(f'startdate {startdate} enddate {enddate}')
-                obsval = obsvar.loc[startdate: enddate].sum(axis=0).data.tolist()
-                print(obsval)
-                bigbag['observed'].append(obsval)
+            # Check if requested year is available in the dataset
+            if forecast_year not in years_in_data:
+                response['error'] = f'Requested forecast year {forecast_year} not found in dataset. Available years: {min_year}-{max_year}'
+                return (response, headers)
 
-        obs_ds.close()
-        fcst_ds.close()
+            for y in range(min_year, max_year+1):
+                print(y, month)
 
-    bigbag['observed_sorted'] = np.sort(np.array(bigbag['observed']))
-    bigbag['ensemble_sorted'] = np.sort(np.array(bigbag['ensemble']).flatten())
-    
-    print(f'ensemble_sorted {bigbag["ensemble_sorted"]}')
+                # Find time indices for this year/month using flattened times
+                time_matches = [(t.year == y and t.month == month) for t in fcst_times]
+                time_indices = [i for i, match in enumerate(time_matches) if match]
+
+                # Extract forecast data based on time array structure
+                lead_slice = slice(lead[0], lead[1] + 1)
+                time_indices = np.array(time_indices)
+                print('time indices', time_indices)
+                print('lead slice', lead_slice)
+
+                try:
+                    extract = fcst_var[int(time_indices[0]), lead_slice, :24]  # use all 51 not 20 (not sure what happened here)
+                except:
+                    break
+
+                extract = extract * VARMAP[varname]['scale']  # scale to mm/month
+                extract = extract.sum(axis=0)  # sum over lead months to get seasonal total per ensemble member
+                print(extract.shape, extract) #= (20,) or (51,) for full ensemble
+
+                ensemble_vals = extract.flatten()
+                vals['ensemble'].append(ensemble_vals)
+                print("ensemble_vals", ensemble_vals)
+
+                if y != forecast_year: # Get observed values if not forecast year
+                    yearA = y
+                    yearB = y
+                    monthA = month + lead[0]
+                    monthB = month + lead[1]
+                    if monthA > 12:
+                        monthA -= 12
+                        yearA += 1
+                    if monthB > 12:
+                        monthB -= 12
+                        yearB += 1
+
+                    startdate = f'{yearA}-{monthA:02d}-01'
+                    enddate = f'{yearB}-{monthB:02d}-28'
+                    print(f'startdate {startdate} enddate {enddate}')
+                    obs_val = obs_var.loc[startdate: enddate].sum(axis=0).item()
+
+                    print('obs_val', obs_val)
+                    vals['observed'].append(obs_val)
+                else:
+                    vals['observed'].append(-1.0)
+
+                vals['years'].append(y)
+
+        finally:
+            if obs_ds is not None:
+                obs_ds.close()
+            if fcst_ds is not None:
+                fcst_ds.close()
+
+    vals['observed'] = np.array(vals['observed'])
+    vals['ensemble'] = np.array(vals['ensemble'])
+
+    print('years', vals['years'])
+    print('observed', vals['observed'])
+    print('ensemble', vals['ensemble'])
+
 
     # Find what percentile the threshold value represents in observed climatology
-    obs_percentile = percentileofscore(bigbag['observed_sorted'], obs_threshold, kind='strict')
+    obs_percentile = percentileofscore(vals['observed'][vals['observed'] > 0], obs_threshold, kind='strict')
     
     # cap percentile to 99.9 and 0.1 to avoid division by zero problems
     if obs_percentile >= 99.9:
@@ -364,120 +381,88 @@ def forecast(model, year, month, varname, feature_id):
     print(f'obs_percentile {obs_percentile}')
 
     # Find equivalent threshold in forecast climatology
-    ens_threshold = np.percentile(bigbag['ensemble_sorted'], obs_percentile) # silence numpy warnings, should be faster
+    ens_threshold = np.percentile(vals['ensemble'], obs_percentile) # silence numpy warnings, should be faster
     print(f'ensemble threshold {ens_threshold}')
 
-    # calibration
-    prob_below = []
-    prob_above = []
-    for i in range(len(bigbag['ensemble'])):
-        ens_vals = np.array(bigbag['ensemble'][i])
-        prob_below.append(100.0 * (ens_vals < ens_threshold).sum() / len(ens_vals))
-        prob_above.append(100.0 * (ens_vals >= ens_threshold).sum() / len(ens_vals))
-        del ens_vals
+    obs_above = 0
+    obs_below = 0
+    hits = 0
+    false_positives = 0
+    false_negatives = 0
+    misses = 0
+    fcst_prob_below = 50.0
+    fcst_prob_above = 50.0
 
-    prob_below = np.array(prob_below)
-    prob_above = np.array(prob_above)
     
-    # These thresholds define when to issue a forecast
-    threshold_below = np.percentile(prob_below, 100 - obs_percentile)  
-    threshold_above = np.percentile(prob_above, 100 - obs_percentile)
+    for i, year in enumerate(vals['years']):
 
-    # Calculate forecast probabilities for the target year
-    forecast_ensemble = vals[forecast_year]['ensemble']
-    print(forecast_year, np.sort(forecast_ensemble))
-    prob_below = 100.0 * (np.array(forecast_ensemble) < ens_threshold).sum() / len(forecast_ensemble)
-    prob_above = 100.0 * (np.array(forecast_ensemble) >= ens_threshold).sum() / len(forecast_ensemble)
-    
-    # Determine if forecast indicates high probability event
-    fcst_below = prob_below > threshold_below
-    fcst_above = prob_above > threshold_above
+        print('year: ', year)
 
-    if fcst_below and fcst_above:
-        if prob_below > prob_above:
-            fcst_above = False
-        elif prob_above > prob_below:
-            fcst_below = False
+        ens_vals = np.sort(vals['ensemble'][i])
+
+        print(ens_threshold, ens_vals)
+
+        prob_below = 100.0 * sum(ens_vals < ens_threshold)/len(ens_vals)
+        prob_above = 100.0 - prob_below
+
+        if year == forecast_year:
+
+            fcst_prob_below = prob_below
+            fcst_prob_above = prob_above
+
         else:
-            # If both probabilities are equal, set both to False
-            fcst_below = False
-            fcst_above = False
 
-    ensemble_mems_above = len([x for x in forecast_ensemble if x > ens_threshold])
-    ensemble_mems_below = len([x for x in forecast_ensemble if x <= ens_threshold])
+            obs_val = vals['observed'][i]
 
-    # Hindcast Verification
-    hits_below = hits_above = misses_below = misses_above = falses_below = falses_above = neutral = total_forecasts = 0
-    for i in range(len(bigbag['ensemble'])): # bigbag only filled with hindcast so can go by index not year
-        obs_val_at_t = bigbag['observed'][i]
-        ens_vals_at_t = bigbag['ensemble'][i]
-        ens_vals_at_t = np.sort(ens_vals_at_t) # sort only this year != bigbag['ensemble_sorted']
-        
-        # Calculate probabilities for this year 
-        prob_below_at_t = 100.0 * (ens_vals_at_t < ens_threshold).sum() / len(ens_vals_at_t)
-        prob_above_at_t = 100.0 * (ens_vals_at_t >= ens_threshold).sum() / len(ens_vals_at_t)
+            print('obs_val', obs_val)
 
-        # Determine if forecast indicates high probability event
-        fcst_below_at_t = prob_below_at_t > threshold_below
-        fcst_above_at_t = prob_above_at_t > threshold_above
+            print('below', prob_below, obs_val <= obs_threshold)
+            print('above', prob_above, obs_val > obs_threshold)
 
-        if fcst_below_at_t and fcst_above_at_t:
-            if prob_below_at_t > prob_above_at_t:
-                fcst_above_at_t = False
-            elif prob_above_at_t > prob_below_at_t:
-                fcst_below_at_t = False
+            if obs_val <= obs_threshold:
+                obs_below += 1
             else:
-                # If both probabilities are equal, set both to False
-                fcst_below_at_t = False
-                fcst_above_at_t = False
+                obs_above += 1
 
-        obs_below_at_t = obs_val_at_t < obs_threshold
-        obs_above_at_t = obs_val_at_t >= obs_threshold
+            if prob_below > 100.0 - obs_percentile and obs_val < obs_threshold:
+                hits += 1
+                print('hitB')
 
-        # correct forecasts
-        if fcst_below_at_t and obs_below_at_t:
-            hits_below = hits_below + 1        # Correctly predicted below-threshold event
-        if fcst_above_at_t and obs_above_at_t:
-            hits_above = hits_above + 1        # Correctly predicted above-threshold event
-        
-        # false forecasts (forecast predicted event but it didn't happen)
-        if fcst_below_at_t and not obs_below_at_t:
-            falses_below = falses_below + 1      # Predicted below-threshold but observed above
-        if fcst_above_at_t and not obs_above_at_t:
-            falses_above = falses_above + 1      # Predicted above-threshold but observed below
-        
-        # misses (event happened but forecast didn't predict it)
-        if not fcst_below_at_t and obs_below_at_t:
-            misses_below = misses_below + 1      # Missed a below-threshold event
-        if not fcst_above_at_t and obs_above_at_t:
-            misses_above = misses_above + 1      # Missed an above-threshold event
-        
-        # neutral forecast (neither above nor below threshold exceeded)
-        if not fcst_below_at_t and not fcst_above_at_t:
-            neutral = neutral + 1  # No forecast issued (regardless of what was observed)
+            if prob_below <= 100.0 - obs_percentile and obs_val >= obs_threshold:
+                hits += 1
+                print('hitA')
 
-        if fcst_below_at_t or fcst_above_at_t:
-            total_forecasts = total_forecasts + 1
+            if prob_below > 100.0 - obs_percentile and obs_val >= obs_threshold:
+                misses += 1
+                false_positives += 1
+                print('miss, false_positive')
+
+            if prob_below <= 100.0 - obs_percentile and obs_val < obs_threshold:
+                misses += 1
+                false_negatives += 1
+                print('miss, false_negative')
+
+
+    print('hits', hits)
+    print('misses', misses)
+    print('false_positive', false_positives)
+    print('false_negatives', false_negatives)
+
+    print('fcst_prob_above', fcst_prob_above)
+    print('fcst_prob_below', fcst_prob_below)
+
     
-    response['obs_threshold'] = obs_threshold
+    response['obs_threshold'] = int(round(obs_threshold))
     response['obs_percentile'] = int(round(obs_percentile))
+    response['obs_above'] = obs_above
+    response['obs_below'] = obs_below
     response['ens_threshold'] = ens_threshold
-    response['prob_below'] = int(prob_below)
-    response['prob_above'] = int(prob_above)
-    response['fcst_below'] = str(fcst_below)
-    response['fcst_above'] = str(fcst_above)
-    response['ensemble_mems_above'] = ensemble_mems_above
-    response['ensemble_mems_below'] = ensemble_mems_below
-    response['hits_below'] = hits_below
-    response['hits_above'] = hits_above
-    response['misses_below'] = misses_below
-    response['misses_above'] = misses_above
-    response['falses_below'] = falses_below
-    response['falses_above'] = falses_above
-    response['neutral'] = neutral
-    response['total_forecasts'] = total_forecasts
-    response['verification_years_count'] = len(bigbag['ensemble'])
-    response['verification_year_range'] = f"{min_year}-{max_year}"
+    response['fcst_prob_below'] = int(round(fcst_prob_below))
+    response['fcst_prob_above'] = int(round(fcst_prob_above))
+    response['hits'] = hits
+    response['misses'] = misses
+    response['false_positives'] = false_positives
+    response['false_negatives'] = false_negatives
 
     return (response, headers)
 

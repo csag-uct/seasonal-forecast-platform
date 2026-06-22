@@ -70,23 +70,9 @@ Does this relate with what you know about the location?
       :showThresholdSelector="true"
     />
 
-    <!-- Feature Data Panel -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
-        <h5 class="card-title mb-3">📊 Feature Analysis</h5>
-        <FeatureDataPanel />
-      </div>
-    </div>
+    <!-- Forecast Panel -->
+    <ForecastResults />
 
-    <!-- API Health Check -->
-    <div class="mt-4">
-      <button class="btn btn-outline-secondary" @click="checkHealth" :disabled="loading">
-        {{ loading ? "Checking…" : "Check API Health" }}
-      </button>
-      <span v-if="healthMsg" class="ms-3 badge" :class="healthOk ? 'bg-success' : 'bg-danger'">
-        {{ healthMsg }}
-      </span>
-    </div>
   </div>
 </template>
 
@@ -103,7 +89,7 @@ import { useDateStore } from "../stores/dateStore";
 import YearMonthPicker from "../components/Yearmonthpicker.vue";
 import MapView from "../components/MapView.vue";
 import ChartView from "../components/ChartView.vue";
-import FeatureDataPanel from "../components/FeatureDataPanel.vue";
+import ForecastResults from "../components/ForecastResults.vue";
 
 const mapStore = useMapStore();
 const selectStore = useSelectStore();
