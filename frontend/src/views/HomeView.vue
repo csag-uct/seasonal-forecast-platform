@@ -5,14 +5,19 @@
       <div class="col-md-8">
         <h2 class="fw-bold mb-1">Exploring forecast data</h2>
         <p>
-        This page presents allows you to explore a seasonal forecast produced in <strong>{{ dateStore.monthName}} {{ dateStore.year }}</strong>.  You will be able to select a location, a period of the year, and a minimum or maximum requirement to
-produce a personalised forecast.  
+        This page presents allows you to explore a seasonal forecast produced in <strong>{{ dateStore.monthName}} {{ dateStore.year }}</strong>.  
+        You will be able to select a location, a range of months, and an amount of rainfall.  These will be used to produce a forecast of the
+        probability of this amount of rainfall occuring during the selected months in the year ahead.  
+        </p>
+        <p>
+        You can also select forecasts produced in other months in the past by selecting a month and a year.
         </p>
       </div>
       <div class="col-md-4 d-flex justify-content-start">
         <YearMonthPicker />
       </div>
     </div>
+    <hr/>
 
 
     <!-- Map Section -->
@@ -27,30 +32,12 @@ plus (+) and minus (-) signs or using the zoom function on your device.
           @select="onMapSelect"
         />
 
-        <!-- Selected feature as Vue model -->
-        <div v-if="selectedHexId !== null" class="mt-3 p-3 bg-light rounded">
-          <p class="mb-1 fw-semibold">Selected Feature (Vue model)</p>
-          <div class="row g-2">
-            <div class="col-sm-4">
-              <label class="form-label text-muted small mb-1">Hex ID</label>
-              <input class="form-control font-monospace" :value="selectedHexId" readonly />
-            </div>
-            <div class="col-sm-4">
-              <label class="form-label text-muted small mb-1">Latitude</label>
-              <input class="form-control font-monospace" :value="clickedLat?.toFixed(6)" readonly />
-            </div>
-            <div class="col-sm-4">
-              <label class="form-label text-muted small mb-1">Longitude</label>
-              <input class="form-control font-monospace" :value="clickedLon?.toFixed(6)" readonly />
-            </div>
-          </div>
-        </div>
-
+    <hr/>
     <h2 class="fw-bold mb-1">Average Seasons</h2>
     <p>
-    This seasonal chart shows the historical average rainfall per month for your chosen location. The data runs from 1981 to 2025,
-you can get the monthly totals by hovering over the bars.<br/>
-Does this relate with what you know about the location?
+    This seasonal chart shows the historical average rainfall per month for your chosen location. The data runs from 1981 to 2026,
+you can get the monthly totals by hovering over the bars.</p>
+    <p>Does this relate with what you know about the location?
     </p>
     <ChartView
       title="Monthly averages"
@@ -58,18 +45,18 @@ Does this relate with what you know about the location?
       :showRangeSlider="false"
       :showThresholdSelector="false"
     />
-
-
     <!--Chart -->
     <h2 class="fw-bold mb-1">Seasonal History</h2>
     <p>
-    This seasonal chart shows the historical rainfall per season for your chosen location.  You can select the months of your season of interest using the sliders below.
+    The plot below automatically updates annual amounts for each year from 1981 to 2025, depending on the
+months you selected using the slider below
     </p>
     <ChartView
       :showRangeSlider="true"
       :showThresholdSelector="true"
     />
 
+    <hr/>
     <!-- Forecast Panel -->
     <ForecastResults />
 

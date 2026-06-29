@@ -8,25 +8,36 @@
 
     <template v-else>
 
-    <p>This amount of rainfall was not met {{ result.obs_below}} times over the past {{ result.obs_below + result.obs_above }} years which is {{ result.obs_percentile }}% of the time.
+    <p>This amount of rainfall was <strong>not met {{ result.obs_below}} times </strong> over the past {{ result.obs_below + result.obs_above }} years which is {{ result.obs_percentile }}% of the time.
     </p>
 
-    <h3>Less than {{ result.obs_threshold }}: {{ result.obs_percentile }}% of the time</h3>
+    <h4 class="fw-bold mb-1">Less than {{ result.obs_threshold }} (mm): {{ result.obs_percentile }}% of the time</h4>
+    <br/>
 
-    <p>This also means that this amount of rainfall was met {{ result.obs_above}} times over the past {{ result.obs_below + result.obs_above }} years which is {{ 100.0 - result.obs_percentile }}% of the time.
+    <p>This also means that this amount of rainfall <strong>was met {{ result.obs_above}} times </strong> over the past {{ result.obs_below + result.obs_above }} years which is {{ 100.0 - result.obs_percentile }}% of the time.
     </p>
 
-    <h3>So will {{ result.obs_threshold }} mm of rainfall be received for the coming period?</h3>
+    <hr/>
+    <h2 class="fw-bold mb-1">Forecast for the coming season</h2>
 
-    <p>The forecast says that there is a {{ result.fcst_prob_above }}% probability of this occuring and {{ result.fcst_prob_below }}% probability of it not occuring.</p>
+    <p>The forecast says that there is a {{ result.fcst_prob_below }}% probability that {{ result.obs_threshold }} will not occur during the next season.</p>
 
-    <h3>Historical accuracy of the forecast</h3>
+    <h4 class="fw-bold mb-1">Less than {{ result.obs_threshold }} (mm): {{ result.fcst_prob_below }}% probability for the coming season</h4> 
+
+    <p>This also means that there is a {{ result.fcst_prob_above }}% probability of {{ result.obs_threshold }} will occur during the next season.</p>
+
+    <h2 class="fw-bold mb-1">Historical accuracy of the forecast</h2>
+
     <p>Consider that the forecast is never perfect and this is one of many forecasts.</p>
+    
     <p>To help you interpret the numbers above and to build an appropriate level of confidence in the forecast, let us
     look at what happened in the past.</p>
+    
     <p>Over the so {{ result.hits + result.misses }} years of historical data, the forecast (for this amount and this period) was:</p>
-    <p>Correct {{ result.hits }} times.  i.e. forecast matched what actually happened</p>
-    <p>Incorrect {{ result.misses }} times.  i.e. forecast was wrong (predicted one thing, observed another)</p>
+    
+    <p><strong>Correct {{ result.hits }} times.</strong>  i.e. forecast matched what actually happened</p>
+    
+    <p><strong>Incorrect {{ result.misses }} times.</strong>  i.e. forecast was wrong (predicted one thing, observed another)</p>
     
     </template>
 

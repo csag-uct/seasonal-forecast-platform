@@ -42,6 +42,11 @@
 
 
       <template v-if="showThresholdSelector">
+          <h2 class="fw-bold mb-1">Rainfall threshold selection</h2>
+          <p>
+            Choose what amount of rainfall is required.
+For example, the rainfall that will meet your crop needs for your chosen period of time.
+          </p>
         <div class="col-12">
           <div class="mt-4 px-1">
               <ThresholdSlider

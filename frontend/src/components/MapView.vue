@@ -6,11 +6,7 @@
     <div class="map-overlay card border-0 shadow-sm">
       <div class="card-body py-2 px-3">
         <div class="d-flex align-items-center gap-3 flex-wrap">
-          <span class="text-muted small fw-semibold text-uppercase" style="letter-spacing:.05em">
-            🔷 Selected Hex
-          </span>
           <template v-if="featureId !== null">
-            <span class="badge bg-dark font-monospace fs-6">ID: {{ featureId }}</span>
             <span class="badge bg-secondary font-monospace">
               {{ lat.toFixed(5) }}, {{ lon.toFixed(5) }}
             </span>
@@ -19,7 +15,7 @@
             </button>
           </template>
           <span v-else class="text-muted small fst-italic">
-            Click a hexagon to select it
+            Click a hexagon to select location
           </span>
         </div>
       </div>
