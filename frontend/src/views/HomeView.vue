@@ -5,7 +5,7 @@
       <div class="col-md-8">
         <h2 class="fw-bold mb-1">Exploring forecast data</h2>
         <p>
-        This page presents allows you to explore a seasonal forecast produced in <strong>{{ dateStore.monthName}} {{ dateStore.year }}</strong>.  
+        This page allows you to explore a seasonal forecast produced in <strong>{{ dateStore.monthName}} {{ dateStore.year }}</strong>.  
         You will be able to select a location, a range of months, and an amount of rainfall.  These will be used to produce a forecast of the
         probability of this amount of rainfall occuring during the selected months in the year ahead.  
         </p>
@@ -42,6 +42,7 @@ you can get the monthly totals by hovering over the bars.</p>
     <ChartView
       title="Monthly averages"
       timeAgg="seasonal"
+      :x-label="Month"
       :showRangeSlider="false"
       :showThresholdSelector="false"
     />

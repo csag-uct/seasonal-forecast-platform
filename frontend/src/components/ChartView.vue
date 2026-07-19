@@ -33,7 +33,7 @@
               :id="mapStore.featureId"
               :params="params"
               color="#4285F4"
-              x-label="Year"
+              :x-label="Year"
               :y-label="selectedCategory"
               @range="onChartRange"
             />

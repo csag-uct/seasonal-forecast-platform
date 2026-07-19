@@ -33,7 +33,7 @@
     <p>To help you interpret the numbers above and to build an appropriate level of confidence in the forecast, let us
     look at what happened in the past.</p>
     
-    <p>Over the so {{ result.hits + result.misses }} years of historical data, the forecast (for this amount and this period) was:</p>
+    <p>Over the {{ result.hits + result.misses }} years of historical data, the forecast (for this amount and this period) was:</p>
     
     <p><strong>Correct {{ result.hits }} times.</strong>  i.e. forecast matched what actually happened</p>
     
